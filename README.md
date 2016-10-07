@@ -1,4 +1,4 @@
-tensorflow on CloudML
+TensorFlow on CloudML
 ====
 
 refs: https://cloud.google.com/ml/docs/quickstarts/training
@@ -51,7 +51,7 @@ open http://localhost:8080
 ```
 
 CloudML run single worker
-----
+=========================
 
 ```
 cd trainable
@@ -86,7 +86,7 @@ gcloud beta ml jobs describe --project ${PROJECT_ID} ${JOB_NAME}
 ```
 
 CloudML run distributed multiple workers
-----
+========================================
 
 ```
 cd distributed
@@ -141,8 +141,8 @@ Inspect job
 gcloud beta ml jobs describe --project ${PROJECT_ID} ${JOB_NAME}
 ```
 
-hyperparameter tuning
----------------------
+Hyperparameter tuning
+=====================
 
 ```
 cd hptuning
@@ -212,5 +212,55 @@ gcloud beta ml jobs submit training ${JOB_NAME} \
   --train_data_paths="gs://cloud-ml-data/mnist/train.tfr.gz" \
   --eval_data_paths="gs://cloud-ml-data/mnist/eval.tfr.gz" \
   --output_path="${TRAIN_PATH}/output"
+```
+
+Deploy model cloud
+==================
+
+```
+cd deployable
+```
+
+Train the updated model on the CloudML
+
+```
+rm -f data/{checkpoint,events,export}*
+python -m trainer.task
+```
+
+```
+JOB_NAME=mnist_deployable_1
+PROJECT_ID=`gcloud config list project --format "value(core.project)"`
+TRAIN_BUCKET=gs://${PROJECT_ID}-ml
+TRAIN_PATH=${TRAIN_BUCKET}/${JOB_NAME}
+# Clear the output from any previous cloud run.
+gsutil rm -rf ${TRAIN_PATH}
+gcloud beta ml jobs submit training ${JOB_NAME} \
+  --package-path=trainer \
+  --module-name=trainer.task \
+  --staging-bucket="${TRAIN_BUCKET}" \
+  --region=us-central1 \
+  -- \
+  --train_dir="${TRAIN_PATH}/train" \
+  --model_dir="${TRAIN_PATH}/model"
+```
+
+Deploy the model on the cloud
+
+```
+MODEL_NAME=mnist_1
+gcloud beta ml models create ${MODEL_NAME}
+gcloud beta ml models versions create \
+  --origin=${TRAIN_PATH}/model/ \
+  --model=${MODEL_NAME} \
+  v1
+gcloud beta ml models versions set-default --model=${MODEL_NAME} v1
+```
+
+Use the online prediction service(alpha)
+
+```
+gcloud beta ml predict --model=${MODEL_NAME} \
+  --instances=data/predict_sample.tensor.json
 ```
 
